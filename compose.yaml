@@ -1,0 +1,18 @@
+services:
+  parakeet-api:
+    build:
+      context: .
+    image: parakeet-api:local
+    ports:
+      - "8000:8000"
+    environment:
+      PARAKEET_API_KEY: local-dev-key
+      PARAKEET_CHUNK_DURATION_SECONDS: 900
+      PARAKEET_MAX_CONCURRENT_REQUESTS: 1
+    volumes:
+      - parakeet-model-cache:/models
+    gpus: all
+    restart: unless-stopped
+
+volumes:
+  parakeet-model-cache:

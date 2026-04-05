@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parakeet-api"
+version = "0.1.0"
+description = "OpenAI-compatible transcription API backed by NVIDIA Parakeet"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.135.3,<0.136",
+  "nemo_toolkit[asr]>=2.7.2,<2.8",
+  "python-multipart>=0.0.22,<0.0.23",
+  "torch>=2.7.1,<2.8",
+  "torchaudio>=2.7.1,<2.8",
+  "uvicorn[standard]>=0.43.0,<0.44",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv]
+required-version = ">=0.10.8"
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu128", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
+]
+torchaudio = [
+  { index = "pytorch-cu128", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
