@@ -6,10 +6,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
+from starlette.datastructures import UploadFile
 
 from parakeet_api.audio import AudioProcessingError
 from parakeet_api.config import (
@@ -236,6 +237,7 @@ def healthz() -> dict[str, object]:
     }
 
 
+@app.get("/openai/v1/models")
 @app.get("/v1/models")
 def list_models(request: Request) -> dict[str, object]:
     _require_api_key(request)
@@ -254,6 +256,7 @@ def list_models(request: Request) -> dict[str, object]:
 
 
 @app.post("/audio/transcriptions")
+@app.post("/openai/v1/audio/transcriptions")
 @app.post("/v1/audio/transcriptions")
 async def create_transcription(request: Request):
     _require_api_key(request)
@@ -362,6 +365,7 @@ async def create_transcription(request: Request):
 
 
 @app.post("/audio/translations")
+@app.post("/openai/v1/audio/translations")
 @app.post("/v1/audio/translations")
 def create_translation(request: Request):
     _require_api_key(request)
