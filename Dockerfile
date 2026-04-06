@@ -42,7 +42,7 @@ COPY src ./src
 
 RUN uv sync --no-dev --frozen
 
-RUN useradd --create-home --uid 10001 appuser && \
+RUN useradd --create-home --uid 1000 appuser && \
     mkdir -p /models /tmp/parakeet-api/uploads && \
     chown -R appuser:appuser /app /models /tmp/parakeet-api
 
