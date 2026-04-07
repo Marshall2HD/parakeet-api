@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import logging
 import threading
 from pathlib import Path
 from typing import Any
 
-from parakeet_api.audio import convert_to_wav, probe_audio_duration, split_audio
+from parakeet_api.audio import AudioChunk, convert_to_wav, probe_audio_duration, split_audio
 from parakeet_api.config import Settings
 from parakeet_api.formatters import join_transcript_parts
 from parakeet_api.transcription import TranscriptionResult, TranscriptSegment, TranscriptWord
+
+LOGGER = logging.getLogger("parakeet_api.runtime")
+EMPTY_RESULT_RETRY_CHUNK_SECONDS = 480
 
 
 class ModelRuntimeError(RuntimeError):
@@ -51,34 +55,34 @@ class ParakeetRuntime:
         segments: list[TranscriptSegment] = []
 
         for chunk in chunks:
-            chunk_result = self._transcribe_chunk(
+            for resolved_chunk, chunk_result in self._transcribe_with_empty_result_retry(
                 model,
-                chunk.path,
+                chunk,
+                workspace,
                 want_words=want_words,
                 want_segments=want_segments,
-                chunk_duration=chunk.duration_seconds,
-            )
-            if chunk_result.text:
-                texts.append(chunk_result.text)
-            if want_words:
-                for word in chunk_result.words:
-                    words.append(
-                        TranscriptWord(
-                            word=word.word,
-                            start=round(word.start + chunk.offset_seconds, 3),
-                            end=round(word.end + chunk.offset_seconds, 3),
+            ):
+                if chunk_result.text:
+                    texts.append(chunk_result.text)
+                if want_words:
+                    for word in chunk_result.words:
+                        words.append(
+                            TranscriptWord(
+                                word=word.word,
+                                start=round(word.start + resolved_chunk.offset_seconds, 3),
+                                end=round(word.end + resolved_chunk.offset_seconds, 3),
+                            )
                         )
-                    )
-            if want_segments:
-                for segment in chunk_result.segments:
-                    segments.append(
-                        TranscriptSegment(
-                            id=len(segments),
-                            start=round(segment.start + chunk.offset_seconds, 3),
-                            end=round(segment.end + chunk.offset_seconds, 3),
-                            text=segment.text,
+                if want_segments:
+                    for segment in chunk_result.segments:
+                        segments.append(
+                            TranscriptSegment(
+                                id=len(segments),
+                                start=round(segment.start + resolved_chunk.offset_seconds, 3),
+                                end=round(segment.end + resolved_chunk.offset_seconds, 3),
+                                text=segment.text,
+                            )
                         )
-                    )
 
         return TranscriptionResult(
             text=join_transcript_parts(texts),
@@ -87,6 +91,74 @@ class ParakeetRuntime:
             words=words,
             segments=segments,
         )
+
+    def _transcribe_with_empty_result_retry(
+        self,
+        model,
+        chunk: AudioChunk,
+        workspace: Path,
+        *,
+        want_words: bool,
+        want_segments: bool,
+    ) -> list[tuple[AudioChunk, TranscriptionResult]]:
+        chunk_result = self._transcribe_chunk(
+            model,
+            chunk.path,
+            want_words=want_words,
+            want_segments=want_segments,
+            chunk_duration=chunk.duration_seconds,
+        )
+
+        if (
+            chunk_result.text
+            or chunk_result.words
+            or chunk_result.segments
+            or chunk.duration_seconds <= EMPTY_RESULT_RETRY_CHUNK_SECONDS
+        ):
+            return [(chunk, chunk_result)]
+
+        retry_chunk_seconds = min(
+            EMPTY_RESULT_RETRY_CHUNK_SECONDS,
+            max(int(chunk.duration_seconds / 2), 1),
+        )
+        if retry_chunk_seconds >= chunk.duration_seconds:
+            return [(chunk, chunk_result)]
+
+        LOGGER.warning(
+            "Empty transcript for %.3fs chunk at offset %.3fs; retrying as %ss subchunks.",
+            chunk.duration_seconds,
+            chunk.offset_seconds,
+            retry_chunk_seconds,
+        )
+
+        retry_dir = workspace / f"retry-{int(chunk.offset_seconds * 1000):010d}"
+        retry_dir.mkdir(parents=True, exist_ok=True)
+        retry_chunks = split_audio(
+            chunk.path,
+            self.settings.ffmpeg_binary,
+            chunk.duration_seconds,
+            retry_chunk_seconds,
+            retry_dir,
+        )
+        if len(retry_chunks) <= 1:
+            return [(chunk, chunk_result)]
+
+        results: list[tuple[AudioChunk, TranscriptionResult]] = []
+        for retry_chunk in retry_chunks:
+            results.extend(
+                self._transcribe_with_empty_result_retry(
+                    model,
+                    AudioChunk(
+                        path=retry_chunk.path,
+                        offset_seconds=chunk.offset_seconds + retry_chunk.offset_seconds,
+                        duration_seconds=retry_chunk.duration_seconds,
+                    ),
+                    workspace,
+                    want_words=want_words,
+                    want_segments=want_segments,
+                )
+            )
+        return results
 
     def _get_model(self):
         if self._model is not None:

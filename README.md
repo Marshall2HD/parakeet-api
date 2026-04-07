@@ -102,6 +102,7 @@ uv run uvicorn parakeet_api.main:app --reload
   - Default: `8000`
 - `PARAKEET_CHUNK_DURATION_SECONDS`
   - Default: `900`
+  - Local attention stays enabled regardless. This chunking limit is still a server-side guardrail around NeMo's `transcribe()` path, which is more reliable on shorter fragments than on single very long files.
 - `PARAKEET_MAX_CONCURRENT_REQUESTS`
   - Default: `1`
 - `PARAKEET_ALLOW_CPU_FALLBACK`
