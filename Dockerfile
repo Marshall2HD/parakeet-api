@@ -29,25 +29,25 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     ffmpeg \
     libsndfile1
 
-RUN useradd --create-home --shell /bin/bash --uid 1000 appuser && \
+RUN useradd --create-home --shell /bin/bash --uid 1000 appuser || true && \
     mkdir -p /models /tmp/parakeet-api/uploads && \
-    chown -R appuser:appuser /models /tmp/parakeet-api
+    chown -R 1000:1000 /models /tmp/parakeet-api
 
 WORKDIR /app
-RUN chown appuser:appuser /app
+RUN chown 1000:1000 /app
 
 COPY --from=ghcr.io/astral-sh/uv:0.10 /uv /bin/uv
 
-USER appuser
+USER 1000
 
-COPY --chown=appuser pyproject.toml uv.lock .python-version README.md ./
+COPY --chown=1000:1000 pyproject.toml uv.lock .python-version README.md ./
 
-RUN --mount=type=cache,target=/home/appuser/.cache/uv,uid=1000,gid=1000 \
+RUN --mount=type=cache,target=/tmp/uv-cache,uid=1000,gid=1000 \
     uv sync --no-dev --frozen --no-install-project
 
-COPY --chown=appuser src ./src
+COPY --chown=1000:1000 src ./src
 
-RUN --mount=type=cache,target=/home/appuser/.cache/uv,uid=1000,gid=1000 \
+RUN --mount=type=cache,target=/tmp/uv-cache,uid=1000,gid=1000 \
     uv sync --no-dev --frozen
 
 ENV PATH="/app/.venv/bin:${PATH}"
