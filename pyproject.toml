@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.135.3,<0.136",
   "nemo_toolkit[asr]>=2.7.2,<2.8",
-  "python-multipart>=0.0.22,<0.0.23",
+  "python-multipart>=0.0.26,<0.0.27",
   "torch>=2.7.1,<2.8",
   "torchaudio>=2.7.1,<2.8",
   "uvicorn[standard]>=0.43.0,<0.44",
